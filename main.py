@@ -207,7 +207,13 @@ def automate_opentext_workflow():
            return
 
        # 5. Inbox 클릭
-       inbox_selectors = [(By.XPATH, "//span[text()='Inbox']")]
+       inbox_selectors = [
+           (By.XPATH, "//span[text()='Inbox']"),
+           (By.XPATH, "//div[contains(@class, 'inbox')]//span[text()='Inbox']"),
+           (By.XPATH, "//*[contains(text(), 'Inbox')]"),
+           (By.CSS_SELECTOR, "[data-testid='inbox']"),  # 테스트 ID가 있는 경우
+           (By.PARTIAL_LINK_TEXT, "Inbox")
+       ]
        inbox_element = find_and_click_element(driver, wait, inbox_selectors)
        if not inbox_element:
            print("Inbox 버튼을 찾을 수 없습니다.")
