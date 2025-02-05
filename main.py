@@ -159,12 +159,12 @@ def automate_opentext_workflow():
            return
 
        print("로그인 시도 완료")
-       time.sleep(10)  # 로그인 후 충분한 대기 시간
+       time.sleep(7)  # 로그인 후 충분한 대기 시간
 
        # 4. Homepage 이동 및 Document Manager 클릭
        print("홈페이지로 이동 중...")
        driver.get("https://tradinggrid.opentext.com/tgong/#/homepage")
-       time.sleep(10)  # 페이지 로딩을 위한 충분한 대기 시간
+       time.sleep(7)  # 페이지 로딩을 위한 충분한 대기 시간
        
        try:
            # Document Manager 클릭 시도
@@ -206,59 +206,95 @@ def automate_opentext_workflow():
            print(f"Document Manager 접근 실패: {str(e)}")
            return
 
-       # 5. Inbox 클릭
-       inbox_selectors = [
-           (By.XPATH, "//span[text()='Inbox']"),
-           (By.XPATH, "//div[contains(@class, 'inbox')]//span[text()='Inbox']"),
-           (By.XPATH, "//*[contains(text(), 'Inbox')]"),
-           (By.CSS_SELECTOR, "[data-testid='inbox']"),  # 테스트 ID가 있는 경우
-           (By.PARTIAL_LINK_TEXT, "Inbox")
-       ]
-       inbox_element = find_and_click_element(driver, wait, inbox_selectors)
-       if not inbox_element:
-           print("Inbox 버튼을 찾을 수 없습니다.")
-           return
-
-       time.sleep(5)  # Inbox 클릭 후 대기
-
-       # 6. 검색 필터 적용
+       # Inbox 클릭 부분 수정
        try:
-           # Type 입력
-           type_input = wait.until(EC.presence_of_element_located(
-               (By.XPATH, "//input[@placeholder='Type']")))
-           type_input.clear()
-           type_input.send_keys("DELJIT")
-           time.sleep(1)
+           # 페이지 완전 로드 대기
+           wait.until(lambda d: d.execute_script('return document.readyState') == 'complete')
+           time.sleep(10)  # 대기 시간 증가
+           
+           inbox_selectors = [
+               # 클래스 기반 선택자
+               (By.CSS_SELECTOR, "li.dm-dlbHeader.dm-align-item"),
+               (By.CSS_SELECTOR, "li[role='link']"),
+               # XPath 기반 선택자
+               (By.XPATH, "//li[contains(@class, 'dm-dlbHeader')]"),
+               (By.XPATH, "//li[@role='link']//span[contains(text(),'Inbox')]"),
+               # 텍스트 기반 선택자
+               (By.XPATH, "//span[normalize-space()='Inbox']"),
+               # 복합 선택자
+               (By.CSS_SELECTOR, ".s-center.dm-tile-header.dm-dlib-outline"),
+               # 부모 요소를 통한 접근
+               (By.XPATH, "//div[contains(@class, 'container-fluid')]//li[contains(@class, 'dm-dlbHeader')]")
+           ]
+           
+           print("Inbox 요소 찾기 시도 중...")
+           inbox_element = None
+           
+           for selector in inbox_selectors:
+               try:
+                   # 요소가 보이고 클릭 가능할 때까지 대기
+                   element = wait.until(EC.element_to_be_clickable(selector))
+                   # 요소가 viewport에 보이도록 스크롤
+                   driver.execute_script("arguments[0].scrollIntoView(true);", element)
+                   time.sleep(2)
+                   
+                   # JavaScript로 클릭 시도
+                   driver.execute_script("arguments[0].click();", element)
+                   print(f"Inbox 클릭 성공 (selector: {selector})")
+                   inbox_element = element
+                   break
+               except Exception as e:
+                   print(f"선택자 {selector} 시도 실패: {str(e)}")
+                   continue
+           
+           if not inbox_element:
+               raise Exception("모든 Inbox 선택자 시도 실패")
+           
+           # 클릭 후 페이지 로딩 대기
+           time.sleep(5)
+           
+           # 6. 검색 필터 적용
+           try:
+               # Type 입력
+               type_input = wait.until(EC.presence_of_element_located(
+                   (By.XPATH, "//input[@placeholder='Type']")))
+               type_input.clear()
+               type_input.send_keys("DELJIT")
+               time.sleep(1)
 
-           # Document ID 입력
-           doc_id_input = wait.until(EC.presence_of_element_located(
-               (By.XPATH, "//input[@placeholder='Document ID']")))
-           doc_id_input.clear()
-           doc_id_input.send_keys("5100001476")
-           time.sleep(1)
+               # Document ID 입력
+               doc_id_input = wait.until(EC.presence_of_element_located(
+                   (By.XPATH, "//input[@placeholder='Document ID']")))
+               doc_id_input.clear()
+               doc_id_input.send_keys("5100001476")
+               time.sleep(1)
 
-           # 검색 버튼 클릭
-           search_selectors = [(By.XPATH, "//button[contains(text(),'Search')]")]
-           search_button = find_and_click_element(driver, wait, search_selectors)
-           if not search_button:
-               print("검색 버튼을 찾을 수 없습니다.")
+               # 검색 버튼 클릭
+               search_selectors = [(By.XPATH, "//button[contains(text(),'Search')]")]
+               search_button = find_and_click_element(driver, wait, search_selectors)
+               if not search_button:
+                   print("검색 버튼을 찾을 수 없습니다.")
+                   return
+
+               time.sleep(3)
+
+               # 7. 검색 결과 확인 및 PDF 생성
+               edi_order_row = wait.until(EC.presence_of_element_located(
+                   (By.XPATH, "//tr[contains(., '5100001476')]")))
+               
+               generate_pdf_button = edi_order_row.find_element(
+                   By.XPATH, ".//button[contains(text(),'GENERATE PDF')]")
+               driver.execute_script("arguments[0].click();", generate_pdf_button)
+               time.sleep(10)
+
+               print("PDF 다운로드가 완료되었습니다. 다운로드 폴더를 확인하세요:", download_dir)
+
+           except Exception as e:
+               print(f"검색 및 PDF 생성 중 오류 발생: {str(e)}")
                return
 
-           time.sleep(3)
-
-           # 7. 검색 결과 확인 및 PDF 생성
-           edi_order_row = wait.until(EC.presence_of_element_located(
-               (By.XPATH, "//tr[contains(., '5100001476')]")))
-           
-           generate_pdf_button = edi_order_row.find_element(
-               By.XPATH, ".//button[contains(text(),'GENERATE PDF')]")
-           driver.execute_script("arguments[0].click();", generate_pdf_button)
-           time.sleep(10)
-
-           print("PDF 다운로드가 완료되었습니다. 다운로드 폴더를 확인하세요:", download_dir)
-
        except Exception as e:
-           print(f"검색 및 PDF 생성 중 오류 발생: {str(e)}")
+           print(f"Inbox 클릭 중 오류 발생: {str(e)}")
            return
 
    except Exception as e:
