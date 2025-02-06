@@ -164,6 +164,17 @@ def automate_opentext_workflow():
         print("로그인 시도 완료")
         time.sleep(10)
 
+        # 로그인 후 Document Manager로 이동
+        if navigate_to_inbox(driver, wait):
+            print("Document Manager 진입 성공")
+            # 검색 및 다운로드 실행
+            if search_and_download(driver, wait):
+                print("검색 및 다운로드 성공")
+            else:
+                print("검색 및 다운로드 실패")
+        else:
+            print("Document Manager 진입 실패")
+
     finally:
         if driver:
             driver.quit()
@@ -173,34 +184,59 @@ def navigate_to_inbox(driver, wait):
     try:
         print("Document Manager로 이동 시도 중...")
         
-        # 명확한 Document Manager 요소 찾기
+        # Document Manager 선택자 업데이트
         doc_manager_selectors = [
+            # Full XPath 추가
+            (By.XPATH, "/html/body/div/homepage/homepage-content/div/ot-tile-container/div/div[1]/div/div[2]/div[3]/ot-tile/div/ot-tile-content/div/div[1]/div"),
+            # 기존 선택자들도 유지
             (By.CSS_SELECTOR, "div.portal-tile-title div.portal-title-header-text"),
             (By.XPATH, "//div[contains(@class, 'portal-title-header-text') and contains(text(), 'Document Manager')]"),
-            (By.XPATH, "//div[contains(@class, 'portal-tile-title')]//div[contains(text(), 'Document Manager')]")
+            (By.XPATH, "//div[contains(@class, 'portal-tile-title')]//div[contains(text(), 'Document Manager')]"),
+            # 추가 선택자
+            (By.XPATH, "//ot-tile-content//div[contains(text(), 'Document Manager')]"),
+            (By.XPATH, "//ot-tile//div[contains(text(), 'Document Manager')]")
         ]
+        
+        # Document Manager 요소가 로드될 때까지 명시적 대기
+        wait.until(EC.presence_of_element_located((By.TAG_NAME, "ot-tile-container")))
+        time.sleep(5)  # 추가 대기 시간
         
         # Document Manager 클릭
         doc_manager = None
         for selector in doc_manager_selectors:
             try:
+                print(f"Document Manager 선택자 시도 중: {selector}")
                 doc_manager = wait.until(EC.element_to_be_clickable(selector))
                 if doc_manager:
-                    # 요소가 클릭 가능할 때까지 짧게 대기
+                    # 요소가 보이는 위치로 스크롤
+                    driver.execute_script("arguments[0].scrollIntoView(true);", doc_manager)
                     time.sleep(2)
                     
+                    # 클릭 시도 전 요소가 클릭 가능한 상태인지 한번 더 확인
+                    wait.until(EC.element_to_be_clickable(selector))
+                    
                     try:
-                        # JavaScript로 클릭 시도
+                        # JavaScript로 클릭
                         driver.execute_script("arguments[0].click();", doc_manager)
-                    except:
+                        print("JavaScript 클릭 성공")
+                    except Exception as js_error:
+                        print(f"JavaScript 클릭 실패: {str(js_error)}")
                         try:
-                            # 일반 클릭 시도
+                            # 일반 클릭
                             doc_manager.click()
-                        except:
-                            # ActionChains 사용 시도
-                            ActionChains(driver).move_to_element(doc_manager).click().perform()
+                            print("일반 클릭 성공")
+                        except Exception as normal_error:
+                            print(f"일반 클릭 실패: {str(normal_error)}")
+                            try:
+                                # ActionChains 사용
+                                ActionChains(driver).move_to_element(doc_manager).click().perform()
+                                print("ActionChains 클릭 성공")
+                            except Exception as action_error:
+                                print(f"ActionChains 클릭 실패: {str(action_error)}")
+                                continue
                     
                     print("Document Manager 클릭 성공")
+                    time.sleep(5)  # 클릭 후 대기 시간 증가
                     break
             except Exception as e:
                 print(f"선택자 {selector} 실패: {str(e)}")
@@ -211,27 +247,74 @@ def navigate_to_inbox(driver, wait):
             return False
             
         # Document Manager 페이지 로드 대기
-        time.sleep(5)
+        time.sleep(7)  # 페이지 로드 대기 시간 증가
         
-        # Inbox 클릭
-        inbox_selector = (By.CSS_SELECTOR, "li#dm_dibHeader.dm-tile-header")
-        inbox_element = wait.until(EC.element_to_be_clickable(inbox_selector))
+          # Inbox 선택자 업데이트 (새로운 정보 기반)
+        inbox_selectors = [
+            (By.ID, "dm_dibHeader"),  # ID로 직접 선택
+            (By.CSS_SELECTOR, "#dm_dibHeader"),  # CSS ID 선택자
+            (By.CSS_SELECTOR, "li.dm-tile-header.dm_dib"),  # 클래스 조합
+            (By.XPATH, "//*[@id='dm_dibHeader']"),  # XPath로 ID 선택
+            (By.CSS_SELECTOR, "li[role='link'][class*='dm-tile-header']"),  # 속성 조합
+            (By.XPATH, "//li[contains(@class, 'dm-tile-header') and @id='dm_dibHeader']")  # XPath 조합
+        ]
         
-        if inbox_element:
+        for inbox_selector in inbox_selectors:
             try:
-                driver.execute_script("arguments[0].click();", inbox_element)
-                print("Inbox 클릭 성공")
-                time.sleep(5)
-                return True
-            except Exception as e:
-                print(f"Inbox 클릭 실패: {str(e)}")
-                return False
+                print(f"Inbox 선택자 시도 중: {inbox_selector}")
                 
+                # 명시적 대기 추가
+                wait.until(EC.presence_of_element_located((By.TAG_NAME, "dm-banner")))
+                
+                # 요소가 존재할 때까지 대기
+                inbox_element = wait.until(EC.presence_of_element_located(inbox_selector))
+                
+                # 클릭 가능할 때까지 추가 대기
+                inbox_element = wait.until(EC.element_to_be_clickable(inbox_selector))
+                
+                if inbox_element:
+                    print("Inbox 요소 발견, 클릭 시도...")
+                    time.sleep(2)  # 추가 안정화 대기
+                    
+                    # 뷰포트로 스크롤
+                    driver.execute_script("arguments[0].scrollIntoView(true);", inbox_element)
+                    time.sleep(2)
+                    
+                    try:
+                        # JavaScript 클릭
+                        driver.execute_script("arguments[0].click();", inbox_element)
+                        print("Inbox JavaScript 클릭 성공")
+                    except Exception as js_error:
+                        print(f"JavaScript 클릭 실패: {str(js_error)}")
+                        try:
+                            # 일반 클릭
+                            inbox_element.click()
+                            print("Inbox 일반 클릭 성공")
+                        except Exception as click_error:
+                            print(f"일반 클릭 실패: {str(click_error)}")
+                            try:
+                                # ActionChains 클릭
+                                actions = ActionChains(driver)
+                                actions.move_to_element(inbox_element)
+                                actions.click()
+                                actions.perform()
+                                print("Inbox ActionChains 클릭 성공")
+                            except Exception as action_error:
+                                print(f"ActionChains 클릭 실패: {str(action_error)}")
+                                continue
+                    
+                    time.sleep(5)
+                    return True
+                    
+            except Exception as e:
+                print(f"Inbox 선택자 {inbox_selector} 시도 실패: {str(e)}")
+                continue
+        
+        print("모든 Inbox 선택자 시도 실패")
         return False
         
     except Exception as e:
-        print(f"Document Manager 네비게이션 오류: {str(e)}")
-        return False
+        print(f"전체 네비게이션 프로세스 오류: {str(e)}")
 
 def search_and_download(driver, wait):
     """검색 및 PDF 다운로드 수행"""
