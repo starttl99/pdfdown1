@@ -249,72 +249,60 @@ def navigate_to_inbox(driver, wait):
         # Document Manager 페이지 로드 대기
         time.sleep(7)  # 페이지 로드 대기 시간 증가
         
-          # Inbox 선택자 업데이트 (새로운 정보 기반)
-        inbox_selectors = [
-            (By.ID, "dm_dibHeader"),  # ID로 직접 선택
-            (By.CSS_SELECTOR, "#dm_dibHeader"),  # CSS ID 선택자
-            (By.CSS_SELECTOR, "li.dm-tile-header.dm_dib"),  # 클래스 조합
-            (By.XPATH, "//*[@id='dm_dibHeader']"),  # XPath로 ID 선택
-            (By.CSS_SELECTOR, "li[role='link'][class*='dm-tile-header']"),  # 속성 조합
-            (By.XPATH, "//li[contains(@class, 'dm-tile-header') and @id='dm_dibHeader']")  # XPath 조합
-        ]
+          # Inbox 선택자 - Full XPath를 첫 번째로 시도
+        inbox_xpath = "/html/body/app-root/dm-root/dm-layout/div[1]/dm-banner/document-summary/div/div/div[1]/dm-summary-list/ul/li"
+        print("Inbox Full XPath로 시도 중...")
         
-        for inbox_selector in inbox_selectors:
-            try:
-                print(f"Inbox 선택자 시도 중: {inbox_selector}")
-                
-                # 명시적 대기 추가
-                wait.until(EC.presence_of_element_located((By.TAG_NAME, "dm-banner")))
-                
-                # 요소가 존재할 때까지 대기
-                inbox_element = wait.until(EC.presence_of_element_located(inbox_selector))
-                
-                # 클릭 가능할 때까지 추가 대기
-                inbox_element = wait.until(EC.element_to_be_clickable(inbox_selector))
-                
-                if inbox_element:
-                    print("Inbox 요소 발견, 클릭 시도...")
-                    time.sleep(2)  # 추가 안정화 대기
-                    
-                    # 뷰포트로 스크롤
+        try:
+            # 먼저 요소가 존재하는지 확인
+            wait.until(EC.presence_of_element_located((By.XPATH, inbox_xpath)))
+            
+            # 클릭 가능할 때까지 대기
+            inbox_element = wait.until(EC.element_to_be_clickable((By.XPATH, inbox_xpath)))
+            
+            # 요소로 스크롤
+            driver.execute_script("arguments[0].scrollIntoView(true);", inbox_element)
+            time.sleep(2)
+            
+            # JavaScript로 클릭
+            driver.execute_script("arguments[0].click();", inbox_element)
+            print("Inbox 클릭 성공")
+            
+            time.sleep(5)
+            return True
+            
+        except Exception as e:
+            print(f"Inbox 클릭 실패: {str(e)}")
+            
+            # 백업 선택자들
+            backup_selectors = [
+                (By.ID, "dm_dibHeader"),
+                (By.CSS_SELECTOR, "#dm_dibHeader"),
+                (By.XPATH, "//*[@id='dm_dibHeader']"),
+                (By.CSS_SELECTOR, "li.dm-tile-header.dm_dib")
+            ]
+            
+            # 백업 선택자들로 시도
+            for selector in backup_selectors:
+                try:
+                    print(f"백업 선택자 시도 중: {selector}")
+                    inbox_element = wait.until(EC.element_to_be_clickable(selector))
                     driver.execute_script("arguments[0].scrollIntoView(true);", inbox_element)
                     time.sleep(2)
-                    
-                    try:
-                        # JavaScript 클릭
-                        driver.execute_script("arguments[0].click();", inbox_element)
-                        print("Inbox JavaScript 클릭 성공")
-                    except Exception as js_error:
-                        print(f"JavaScript 클릭 실패: {str(js_error)}")
-                        try:
-                            # 일반 클릭
-                            inbox_element.click()
-                            print("Inbox 일반 클릭 성공")
-                        except Exception as click_error:
-                            print(f"일반 클릭 실패: {str(click_error)}")
-                            try:
-                                # ActionChains 클릭
-                                actions = ActionChains(driver)
-                                actions.move_to_element(inbox_element)
-                                actions.click()
-                                actions.perform()
-                                print("Inbox ActionChains 클릭 성공")
-                            except Exception as action_error:
-                                print(f"ActionChains 클릭 실패: {str(action_error)}")
-                                continue
-                    
+                    driver.execute_script("arguments[0].click();", inbox_element)
+                    print("백업 선택자로 Inbox 클릭 성공")
                     time.sleep(5)
                     return True
-                    
-            except Exception as e:
-                print(f"Inbox 선택자 {inbox_selector} 시도 실패: {str(e)}")
-                continue
+                except Exception as backup_error:
+                    print(f"백업 선택자 {selector} 실패: {str(backup_error)}")
+                    continue
         
         print("모든 Inbox 선택자 시도 실패")
         return False
         
     except Exception as e:
         print(f"전체 네비게이션 프로세스 오류: {str(e)}")
+        return False
 
 def search_and_download(driver, wait):
     """검색 및 PDF 다운로드 수행"""
