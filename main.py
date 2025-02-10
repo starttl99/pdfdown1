@@ -2,6 +2,7 @@ import os
 import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
@@ -180,6 +181,10 @@ def automate_opentext_workflow():
             driver.quit()
 
 def navigate_to_inbox(driver, wait):
+    """
+    Document Manager 페이지에서 Inbox (#dm_dibHeader)를 클릭하는 함수.
+    여러 클릭 방법(자바스크립트, ActionChains, 좌표 기반 클릭, ENTER 키 전송)을 순차적으로 시도합니다.
+    """
     try:
         print("Document Manager로 이동 시도 중...")
         
@@ -203,96 +208,56 @@ def navigate_to_inbox(driver, wait):
         print("\n페이지 로드 대기 중...")
         time.sleep(30)
         
-        print("\n=== DOM 분석 시작 ===")
+        # Inbox 요소 클릭 시도 (여러 방법 적용)
+        print("Inbox 요소 클릭 시도 시작")
+        inbox = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#dm_dibHeader")))
+        driver.execute_script("arguments[0].scrollIntoView(true);", inbox)
+        time.sleep(2)
         
-        # 1. 모든 li 요소 검색 및 상세 정보 출력
-        print("\n[ li 요소 검색 중... ]")
-        all_li_elements = driver.find_elements(By.TAG_NAME, "li")
-        print(f"총 {len(all_li_elements)}개의 li 요소 발견\n")
-        
-        for idx, li in enumerate(all_li_elements, 1):
-            try:
-                print(f"\n=== Li Element #{idx} ===")
-                print("▶ 기본 속성:")
-                print(f"  - ID: {li.get_attribute('id')}")
-                print(f"  - Class: {li.get_attribute('class')}")
-                print(f"  - Role: {li.get_attribute('role')}")
-                print(f"  - Text Content: {li.text}")
-                
-                print("▶ HTML 구조:")
-                print(f"  {li.get_attribute('outerHTML')}")
-                
-                print("▶ 위치 정보:")
-                location = li.location
-                size = li.size
-                print(f"  - Position: x={location['x']}, y={location['y']}")
-                print(f"  - Size: width={size['width']}, height={size['height']}")
-                
-                print("▶ 상태 정보:")
-                print(f"  - Displayed: {li.is_displayed()}")
-                print(f"  - Enabled: {li.is_enabled()}")
-                
-                # XPath 정보
-                print("▶ XPath:")
-                xpath = driver.execute_script("""
-                    function getPathTo(element) {
-                        if (element.id !== '')
-                            return "//*[@id='" + element.id + "']";
-                        if (element === document.body)
-                            return element.tagName.toLowerCase();
-                        var ix = 0;
-                        var siblings = element.parentNode.childNodes;
-                        for (var i = 0; i < siblings.length; i++) {
-                            var sibling = siblings[i];
-                            if (sibling === element)
-                                return getPathTo(element.parentNode) + '/' + element.tagName.toLowerCase() + '[' + (ix + 1) + ']';
-                            if (sibling.nodeType === 1 && sibling.tagName === element.tagName)
-                                ix++;
-                        }
-                    }
-                    return getPathTo(arguments[0]);
-                """, li)
-                print(f"  - Generated XPath: {xpath}")
-                
-                print("-" * 50)
-                
-            except Exception as e:
-                print(f"Element #{idx} 분석 중 오류: {str(e)}")
-                continue
-        
-        print("\n=== DOM 분석 완료 ===")
-        
-        # 2. Inbox 요소 찾기 시도
-        print("\nInbox 요소 찾기 시도 중...")
-        target_element = None
-        
-        for li in all_li_elements:
-            try:
-                if (li.get_attribute('id') == 'dm_dibHeader' or 
-                    'inbox' in li.text.lower() or 
-                    'dm_dib' in (li.get_attribute('class') or '')):
-                    target_element = li
-                    print("잠재적인 Inbox 요소 발견:")
-                    print(f"- ID: {li.get_attribute('id')}")
-                    print(f"- Class: {li.get_attribute('class')}")
-                    print(f"- Text: {li.text}")
-                    break
-            except:
-                continue
-        
-        if target_element:
-            print("\nInbox 요소 클릭 시도...")
-            driver.execute_script("arguments[0].scrollIntoView(true);", target_element)
+        # 방법 1: JavaScript 클릭
+        try:
+            driver.execute_script("arguments[0].click();", inbox)
+            print("JavaScript 클릭 시도 성공")
             time.sleep(2)
-            driver.execute_script("arguments[0].click();", target_element)
-            print("Inbox 클릭 성공")
             return True
-        else:
-            print("\nInbox 요소를 찾을 수 없습니다.")
-            return False
-
+        except Exception as e:
+            print("JavaScript 클릭 시도 실패:", e)
+        
+        # 방법 2: ActionChains 클릭
+        try:
+            ActionChains(driver).move_to_element(inbox).click().perform()
+            print("ActionChains 클릭 시도 성공")
+            time.sleep(2)
+            return True
+        except Exception as e:
+            print("ActionChains 클릭 시도 실패:", e)
+        
+        # 방법 3: 좌표 기반 클릭 (오프셋 적용)
+        try:
+            location = inbox.location
+            x_offset = location['x'] + 5
+            y_offset = location['y'] + 5
+            ActionChains(driver).move_by_offset(x_offset, y_offset).click().perform()
+            print("좌표 기반 클릭 시도 성공")
+            time.sleep(2)
+            return True
+        except Exception as e:
+            print("좌표 기반 클릭 시도 실패:", e)
+        
+        # 방법 4: ENTER 키 전송
+        try:
+            inbox.send_keys(Keys.ENTER)
+            print("ENTER 키 전송 시도 성공")
+            time.sleep(2)
+            return True
+        except Exception as e:
+            print("ENTER 키 전송 시도 실패:", e)
+        
+        print("모든 Inbox 클릭 시도가 실패했습니다.")
+        return False
+        
     except Exception as e:
-        print(f"\n전체 네비게이션 프로세스 오류: {str(e)}")
+        print("전체 네비게이션 프로세스 오류:", e)
         return False
 
 def search_and_download(driver, wait):
@@ -335,12 +300,13 @@ def search_and_download(driver, wait):
                 return True
                 
         except Exception as e:
-            print(f"검색 결과 처리 오류: {str(e)}")
+            print("검색 결과 처리 오류:", e)
             return False
             
     except Exception as e:
-        print(f"검색 및 다운로드 오류: {str(e)}")
+        print("검색 및 다운로드 오류:", e)
         return False
+
 def main():
     """메인 함수"""
     max_retries = 3
@@ -352,7 +318,7 @@ def main():
             break
             
         except Exception as e:
-            print(f"시도 {attempt + 1} 실패: {str(e)}")
+            print(f"시도 {attempt + 1} 실패:", e)
             if attempt < max_retries - 1:
                 print("잠시 후 다시 시도합니다...")
                 time.sleep(5)
