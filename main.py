@@ -183,7 +183,7 @@ def navigate_to_inbox(driver, wait):
     try:
         print("Document Manager로 이동 시도 중...")
         
-        # Document Manager 클릭 (이전 성공했던 방식 유지)
+        # Document Manager 클릭 (기존 코드 유지)
         doc_manager_selectors = [
             (By.XPATH, "/html/body/div/homepage/homepage-content/div/ot-tile-container/div/div[1]/div/div[2]/div[3]/ot-tile/div/ot-tile-content/div/div[1]/div")
         ]
@@ -194,46 +194,105 @@ def navigate_to_inbox(driver, wait):
         if doc_manager:
             driver.execute_script("arguments[0].scrollIntoView(true);", doc_manager)
             time.sleep(2)
-            print("JavaScript 클릭 시도")
             driver.execute_script("arguments[0].click();", doc_manager)
             print("Document Manager 클릭 성공")
         else:
             print("Document Manager 요소를 찾을 수 없습니다")
             return False
             
-        print("페이지 로드 대기 중...")
-        time.sleep(15)  # Document Manager 페이지 로드 대기
-
-        # Inbox 아이콘 클릭 시도
-        inbox_icon_xpath = "/html/body/app-root/dm-root/dm-layout/div[1]/dm-banner/document-summary/div/div/div[1]/dm-summary-list/ul/li/span[1]"
+        print("\n페이지 로드 대기 중...")
+        time.sleep(30)
         
-        try:
-            print("Inbox 아이콘 찾는 중...")
-            inbox_icon = WebDriverWait(driver, 20).until(
-                EC.presence_of_element_located((By.XPATH, inbox_icon_xpath))
-            )
-            
-            # 요소가 클릭 가능할 때까지 대기
-            inbox_icon = WebDriverWait(driver, 20).until(
-                EC.element_to_be_clickable((By.XPATH, inbox_icon_xpath))
-            )
-            
-            print("Inbox 아이콘 발견, 클릭 시도...")
-            driver.execute_script("arguments[0].scrollIntoView(true);", inbox_icon)
+        print("\n=== DOM 분석 시작 ===")
+        
+        # 1. 모든 li 요소 검색 및 상세 정보 출력
+        print("\n[ li 요소 검색 중... ]")
+        all_li_elements = driver.find_elements(By.TAG_NAME, "li")
+        print(f"총 {len(all_li_elements)}개의 li 요소 발견\n")
+        
+        for idx, li in enumerate(all_li_elements, 1):
+            try:
+                print(f"\n=== Li Element #{idx} ===")
+                print("▶ 기본 속성:")
+                print(f"  - ID: {li.get_attribute('id')}")
+                print(f"  - Class: {li.get_attribute('class')}")
+                print(f"  - Role: {li.get_attribute('role')}")
+                print(f"  - Text Content: {li.text}")
+                
+                print("▶ HTML 구조:")
+                print(f"  {li.get_attribute('outerHTML')}")
+                
+                print("▶ 위치 정보:")
+                location = li.location
+                size = li.size
+                print(f"  - Position: x={location['x']}, y={location['y']}")
+                print(f"  - Size: width={size['width']}, height={size['height']}")
+                
+                print("▶ 상태 정보:")
+                print(f"  - Displayed: {li.is_displayed()}")
+                print(f"  - Enabled: {li.is_enabled()}")
+                
+                # XPath 정보
+                print("▶ XPath:")
+                xpath = driver.execute_script("""
+                    function getPathTo(element) {
+                        if (element.id !== '')
+                            return "//*[@id='" + element.id + "']";
+                        if (element === document.body)
+                            return element.tagName.toLowerCase();
+                        var ix = 0;
+                        var siblings = element.parentNode.childNodes;
+                        for (var i = 0; i < siblings.length; i++) {
+                            var sibling = siblings[i];
+                            if (sibling === element)
+                                return getPathTo(element.parentNode) + '/' + element.tagName.toLowerCase() + '[' + (ix + 1) + ']';
+                            if (sibling.nodeType === 1 && sibling.tagName === element.tagName)
+                                ix++;
+                        }
+                    }
+                    return getPathTo(arguments[0]);
+                """, li)
+                print(f"  - Generated XPath: {xpath}")
+                
+                print("-" * 50)
+                
+            except Exception as e:
+                print(f"Element #{idx} 분석 중 오류: {str(e)}")
+                continue
+        
+        print("\n=== DOM 분석 완료 ===")
+        
+        # 2. Inbox 요소 찾기 시도
+        print("\nInbox 요소 찾기 시도 중...")
+        target_element = None
+        
+        for li in all_li_elements:
+            try:
+                if (li.get_attribute('id') == 'dm_dibHeader' or 
+                    'inbox' in li.text.lower() or 
+                    'dm_dib' in (li.get_attribute('class') or '')):
+                    target_element = li
+                    print("잠재적인 Inbox 요소 발견:")
+                    print(f"- ID: {li.get_attribute('id')}")
+                    print(f"- Class: {li.get_attribute('class')}")
+                    print(f"- Text: {li.text}")
+                    break
+            except:
+                continue
+        
+        if target_element:
+            print("\nInbox 요소 클릭 시도...")
+            driver.execute_script("arguments[0].scrollIntoView(true);", target_element)
             time.sleep(2)
-            
-            # JavaScript로 클릭 시도
-            driver.execute_script("arguments[0].click();", inbox_icon)
-            print("Inbox 아이콘 클릭 성공")
-            time.sleep(3)
+            driver.execute_script("arguments[0].click();", target_element)
+            print("Inbox 클릭 성공")
             return True
-            
-        except Exception as e:
-            print(f"Inbox 아이콘 클릭 실패: {str(e)}")
+        else:
+            print("\nInbox 요소를 찾을 수 없습니다.")
             return False
 
     except Exception as e:
-        print(f"전체 네비게이션 프로세스 오류: {str(e)}")
+        print(f"\n전체 네비게이션 프로세스 오류: {str(e)}")
         return False
 
 def search_and_download(driver, wait):
